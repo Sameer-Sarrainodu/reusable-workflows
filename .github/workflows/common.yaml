@@ -21,11 +21,14 @@ on:
         required: true
 
 jobs:
+
   ci:
     runs-on: self-hosted
     outputs:
       appVersion: ${{ steps.package-version.outputs.version }}
+
     steps:
+
       - name: checkout code
         uses: actions/checkout@v5
 
@@ -39,7 +42,7 @@ jobs:
         id: package-version
         run: echo "version=$(jq -r '.version' package.json)" >> "$GITHUB_OUTPUT"
 
-      - name: print app version
+      - name: print version
         run: echo ${{ steps.package-version.outputs.version }}
 
       - name: install dependencies
@@ -59,8 +62,16 @@ jobs:
 
       - name: docker build
         run: |
+          # Remove buildx builder if present
+          docker buildx rm mybuilder || true
+
+          # Disable BuildKit to avoid manifest creation
+          export DOCKER_BUILDKIT=0
+
+          # Build image
           docker build --platform=linux/amd64 \
-          -t ${{ inputs.acc_id }}.dkr.ecr.us-east-1.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${{ steps.package-version.outputs.version }} .
+            -t ${{ inputs.acc_id }}.dkr.ecr.us-east-1.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${{ steps.package-version.outputs.version }} \
+            .
 
       - name: docker push ecr
         run: |
@@ -72,11 +83,12 @@ jobs:
     env:
       component: ${{ inputs.component }}
       appVersion: ${{ needs.ci.outputs.appVersion }}
+
     steps:
       - name: checkout deploy repo
         uses: actions/checkout@v5
         with:
-          repository: Sameer-Sarrainodu/catalogue-cd
+          repository: joindevops-actions/catalogue-deploy
 
       - name: check the files
         run: ls -l
@@ -95,4 +107,5 @@ jobs:
 
       - name: deploy to EKS
         run: |
+          kubectl create ns roboshop
           helm upgrade --install "$component" -f values-dev.yaml --set deployment.imageVersion="$appVersion" .
