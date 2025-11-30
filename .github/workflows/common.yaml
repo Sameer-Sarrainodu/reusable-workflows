@@ -107,5 +107,5 @@ jobs:
 
       - name: deploy to EKS
         run: |
-          kubectl apply 1-namespace.yaml
+          kubectl apply -f 1-namespace.yaml
           helm upgrade --install "$component" -f values-dev.yaml --set deployment.imageversion="$appVersion" .
