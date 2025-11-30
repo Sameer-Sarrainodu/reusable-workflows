@@ -19,6 +19,7 @@ on:
         required: true
       AWS_SECRET_ACCESS_KEY:
         required: true
+
 jobs:
   ci:
     runs-on: self-hosted
@@ -44,35 +45,54 @@ jobs:
       - name: install dependencies
         run: npm install
 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to ECR
+        run: |
+          aws ecr get-login-password --region us-east-1 \
+          | docker login --username AWS --password-stdin ${{ inputs.acc_id }}.dkr.ecr.us-east-1.amazonaws.com
+
       - name: docker build
-        run: docker build --platform=linux/amd64  -t ${{ inputs.acc_id }}.dkr.ecr.us-east-1.amazonaws.com/${{inputs.project}}/${{ inputs.component }}:${{ steps.package-version.outputs.version }} .
+        run: |
+          docker build --platform=linux/amd64 \
+          -t ${{ inputs.acc_id }}.dkr.ecr.us-east-1.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${{ steps.package-version.outputs.version }} .
 
       - name: docker push ecr
         run: |
-          docker push ${{inputs.acc_id }}.dkr.ecr.us-east-1.amazonaws.com/${{inputs.project}}/${{ inputs.component }}:${{ steps.package-version.outputs.version }}
+          docker push ${{ inputs.acc_id }}.dkr.ecr.us-east-1.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${{ steps.package-version.outputs.version }}
 
   cd:
-      runs-on: self-hosted
-      needs: ci
-      env:
-        appVersion: ${{ needs.ci.outputs.appVersion }}
-      steps:
-        - name: checkout deploy repo
-          uses: actions/checkout@v5
-          with:
-            repository: joindevops-actions/catalogue-deploy
-        - name: check the files
-          run: ls -l
-        - name: Configure AWS Credentials
-          uses: aws-actions/configure-aws-credentials@v5.0.0
-          with:
-            aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-            aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-            aws-region: us-east-1
-        - name: authenticate to EKS
-          run: |
-            aws eks update-kubeconfig --region us-east-1 --name roboshop-dev
-            kubectl get nodes
-        - name: deploy to EKS
-          run: |
-            helm upgrade --install ${{ inputs.component }} -f values-dev.yaml --set deployment.imageVersion="$appVersion" .
+    runs-on: self-hosted
+    needs: ci
+    env:
+      component: ${{ inputs.component }}
+      appVersion: ${{ needs.ci.outputs.appVersion }}
+    steps:
+      - name: checkout deploy repo
+        uses: actions/checkout@v5
+        with:
+          repository: Sameer-Sarrainodu/catalogue-cd
+
+      - name: check the files
+        run: ls -l
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: authenticate to EKS
+        run: |
+          aws eks update-kubeconfig --region us-east-1 --name roboshop-dev
+          kubectl get nodes
+
+      - name: deploy to EKS
+        run: |
+          helm upgrade --install "$component" -f values-dev.yaml --set deployment.imageVersion="$appVersion" .
