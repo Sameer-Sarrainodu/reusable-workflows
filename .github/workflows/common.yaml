@@ -108,4 +108,4 @@ jobs:
       - name: deploy to EKS
         run: |
           kubectl create ns roboshop
-          helm upgrade --install "$component" -f values-dev.yaml --set deployment.imageVersion="$appVersion" .
+          helm upgrade --install "$component" -f values-dev.yaml --set deployment.imageversion="$appVersion" .
